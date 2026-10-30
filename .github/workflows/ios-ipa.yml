@@ -19,7 +19,13 @@ jobs:
           fetch-depth: 1
 
       - name: Normalize directory name (中文 -> ios)
-        run: mv "iOS系统" ios
+        run: |
+          if [ ! -d "ios" ]; then
+            d=$(ls -d *"系统"* 2>/dev/null | head -1)
+            if [ -n "$d" ]; then mv "$d" ios; fi
+          fi
+          echo "== repo root =="
+          ls -la
 
       - name: Show Xcode version
         run: xcodebuild -version
@@ -85,7 +91,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          APP_PATH=$(find ios/build/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.app" | head -1)
+          APP_PATH=$(find ios/build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
           echo "app: $APP_PATH"
           rm -rf out && mkdir -p out/Payload
           cp -R "$APP_PATH" out/Payload/
