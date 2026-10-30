@@ -1,101 +1,41 @@
-name: Build iOS IPA
+name: Shell
+options:
+  bundleIdPrefix: com.xingchen
+  deploymentTarget:
+    iOS: "13.0"
+  createIntermediateGroups: true
 
-on:
-  # 只手动触发：避免上传分块时每次 push 都启动 macOS 构建(10倍计费)
-  workflow_dispatch:
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
 
-jobs:
-  build:
-    # macos-15 自带 Xcode 16，能直接用 xcodegen + iphoneos SDK
-    runs-on: macos-15
-    timeout-minutes: 180
-    permissions:
-      contents: write
+targets:
+  Shell:
+    type: application
+    platform: iOS
+    sources:
+      - path: Shell
+        excludes:
+          - "www"
+      - path: Shell/www
+        type: folder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.xingchen.bhc
+        INFOPLIST_FILE: Shell/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        ENABLE_BITCODE: "NO"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Show Xcode version
-        run: xcodebuild -version
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Download & merge asset chunks
-        env:
-          ASSET_TAG: assets-v1
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p /tmp/parts "iOS系统/Shell/www"
-          # 通道1: Release assets-v1 里的 www.tar.* 分块
-          if gh release view "$ASSET_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "release $ASSET_TAG found, downloading..."
-            gh release download "$ASSET_TAG" -R "$GITHUB_REPOSITORY" -D /tmp/parts -p 'www.tar.*' || true
-          else
-            echo "no release $ASSET_TAG, skip"
-          fi
-          # 通道2: 仓库内 assets/ 目录里的 www.tar.* 分块(网页上传方式)
-          if ls assets/www.tar.* >/dev/null 2>&1; then
-            echo "found chunks in repo assets/"
-            cp -f assets/www.tar.* /tmp/parts/
-          fi
-          echo "chunks found: $(ls /tmp/parts | wc -l)"
-          ls -lh /tmp/parts
-          if [ ! -s /tmp/parts/www.tar.00 ] && [ ! -s /tmp/parts/www.tar.000 ]; then
-            echo "ERROR: no www.tar.* chunks found. Upload them to Release tag $ASSET_TAG or repo assets/ dir."
-            exit 1
-          fi
-          # 按字典序合并所有 www.tar.* 分块
-          cat /tmp/parts/www.tar.* > /tmp/www.tar
-          ls -lh /tmp/www.tar
-          tar -xf /tmp/www.tar -C "iOS系统/Shell/www"
-          du -sh "iOS系统/Shell/www"
-          ls "iOS系统/Shell/www" | head
-
-      - name: Generate Xcode project
-        working-directory: iOS系统
-        run: |
-          xcodegen generate
-          ls -la
-
-      - name: Build (unsigned)
-        working-directory: iOS系统
-        run: |
-          set -o pipefail
-          xcodebuild \
-            -project Shell.xcodeproj \
-            -scheme Shell \
-            -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="" \
-            -quiet
-
-      - name: Package IPA and upload as chunks
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          APP_PATH=$(find "iOS系统/build/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.app" | head -1)
-          echo "app: $APP_PATH"
-          rm -rf out && mkdir -p out/Payload
-          cp -R "$APP_PATH" out/Payload/
-          cd out
-          zip -qry Shiguang-unsigned.ipa Payload
-          ls -lh Shiguang-unsigned.ipa
-          cd ..
-          # 成品约 2GB，GitHub 单文件上限 2GB -> 切成 200MB 分块上传到 Release
-          mkdir -p ipa_chunks
-          split -b 200m out/Shiguang-unsigned.ipa ipa_chunks/Shiguang-unsigned.ipa.
-          ls -lh ipa_chunks
-          gh release create ipa-v1 ipa_chunks/* \
-            --title "Shiguang IPA v1 (unsigned)" \
-            --notes "下载全部分块后合并: cat Shiguang-unsigned.ipa.* > Shiguang-unsigned.ipa" \
-            2>/dev/null || gh release upload ipa-v1 ipa_chunks/* --clobber
-          echo "IPA chunks uploaded to release ipa-v1"
+schemes:
+  Shell:
+    build:
+      targets:
+        Shell: all
+    run:
+      config: Release
