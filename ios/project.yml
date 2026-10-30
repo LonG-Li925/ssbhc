@@ -29,7 +29,7 @@ jobs:
           ASSET_TAG: assets-v1
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p /tmp/parts "IOS系统/Shell/www"
+          mkdir -p /tmp/parts "iOS系统/Shell/www"
           # 通道1: Release assets-v1 里的 www.tar.* 分块
           if gh release view "$ASSET_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "release $ASSET_TAG found, downloading..."
@@ -51,18 +51,18 @@ jobs:
           # 按字典序合并所有 www.tar.* 分块
           cat /tmp/parts/www.tar.* > /tmp/www.tar
           ls -lh /tmp/www.tar
-          tar -xf /tmp/www.tar -C "IOS系统/Shell/www"
-          du -sh "IOS系统/Shell/www"
-          ls "IOS系统/Shell/www" | head
+          tar -xf /tmp/www.tar -C "iOS系统/Shell/www"
+          du -sh "iOS系统/Shell/www"
+          ls "iOS系统/Shell/www" | head
 
       - name: Generate Xcode project
-        working-directory: IOS系统
+        working-directory: iOS系统
         run: |
           xcodegen generate
           ls -la
 
       - name: Build (unsigned)
-        working-directory: IOS系统
+        working-directory: iOS系统
         run: |
           set -o pipefail
           xcodebuild \
@@ -82,7 +82,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          APP_PATH=$(find "IOS系统/build/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.app" | head -1)
+          APP_PATH=$(find "iOS系统/build/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.app" | head -1)
           echo "app: $APP_PATH"
           rm -rf out && mkdir -p out/Payload
           cp -R "$APP_PATH" out/Payload/
